@@ -1,0 +1,29 @@
+[package]
+name = "channel-helper-bot-rs"
+version = "0.1.0"
+edition = "2021"
+
+# https://github.com/rustwasm/wasm-pack/issues/1247
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+serde = { version = "1.0.189", features = ["derive"] }
+serde_json = "1.0.107"
+worker = "0.0.18"
+getrandom = { version = "0.2.10", features = ["js"] }
+teloxide-core = { path = "../teloxide/crates/teloxide-core", features = ["nightly"] }
+rand = "0.8.5"
+worker_logger = "0.2.0"
+log = "0.4.20"
+regex = "1.10.2"
+reqwest = "0.11.22"
+tokio = { version = "1.33.0", features = ["macros"] }
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1

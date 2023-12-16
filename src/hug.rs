@@ -1,5 +1,11 @@
 use regex::Regex;
+use reqwest::Url;
 use teloxide_core::{prelude::*, types::*};
+
+enum ChatOrUser {
+    Chat(Chat),
+    User(User),
+}
 
 pub async fn process_message(message: &str, data: Message, bot: Bot) {
     let regex = Regex::new(r"(^/([^a-zA-Z\s¥$]\S*)|^/[$¥](\S+))( (\S+))?").unwrap();
@@ -17,37 +23,76 @@ pub async fn process_message(message: &str, data: Message, bot: Bot) {
                 .find(|it| matches!(&it.kind, MessageEntityKind::TextMention { .. }))
         })
         .map(|it| match &it.kind {
-            MessageEntityKind::TextMention { user } => user,
+            MessageEntityKind::TextMention { user } => ChatOrUser::User(user.clone()),
             _ => unreachable!(),
         });
     let Some(to_user) = at_entity
-        .or(data.reply_to_message().map_or(None, |it| it.from()))
-        .or(data.from())
+        .or(data
+            .reply_to_message()
+            .map_or(None, |it| match it.sender_chat() {
+                Some(from) => Some(ChatOrUser::Chat(from.clone())),
+                None => None,
+            }))
+        .or(data.reply_to_message().map_or(None, |it| match it.from() {
+            Some(from) => Some(ChatOrUser::User(from.clone())),
+            None => None,
+        }))
+        .or(data.sender_chat().map(|it| ChatOrUser::Chat(it.clone())))
+        .or(data.from().map(|it| ChatOrUser::User(it.clone())))
     else {
         return;
     };
+    let to_user_name = match to_user {
+        ChatOrUser::Chat(ref chat) => chat.title().or(chat.first_name()).unwrap_or_default(),
+        ChatOrUser::User(ref user) => &user.first_name,
+    };
+    let Some(from_user) = data
+        .sender_chat()
+        .map(|it| ChatOrUser::Chat(it.clone()))
+        .or(data.from().map(|it| ChatOrUser::User(it.clone())))
+    else {
+        return;
+    };
+    let from_user_name = match from_user {
+        ChatOrUser::Chat(ref chat) => chat.title().or(chat.first_name()).unwrap_or_default(),
+        ChatOrUser::User(ref user) => &user.first_name,
+    };
 
     let mut tg_entities: Vec<MessageEntity> = vec![MessageEntity {
-        kind: MessageEntityKind::TextMention {
-            user: data.from().unwrap().clone(),
+        kind: match from_user {
+            ChatOrUser::User(ref user) => MessageEntityKind::TextMention { user: user.clone() },
+            ChatOrUser::Chat(ref chat) => MessageEntityKind::TextLink {
+                url: Url::parse(&format!(
+                    "https://t.me/{}",
+                    chat.username().unwrap_or_default()
+                ))
+                .unwrap(),
+            },
         },
         offset: 0,
-        length: data.from().unwrap().first_name.chars().count(),
+        length: from_user_name.chars().count(),
     }];
     let mut tg_text = format!(
         "{} {}了 ",
-        data.from().unwrap().first_name,
+        from_user_name,
         add_space_if_english(action.into())
     );
 
     tg_entities.push(MessageEntity {
-        kind: MessageEntityKind::TextMention {
-            user: to_user.clone(),
+        kind: match to_user {
+            ChatOrUser::User(ref user) => MessageEntityKind::TextMention { user: user.clone() },
+            ChatOrUser::Chat(ref chat) => MessageEntityKind::TextLink {
+                url: Url::parse(&format!(
+                    "https://t.me/{}",
+                    chat.username().unwrap_or_default()
+                ))
+                .unwrap(),
+            },
         },
         offset: tg_text.chars().count(),
-        length: to_user.first_name.chars().count(),
+        length: to_user_name.chars().count(),
     });
-    tg_text = format!("{}{}", tg_text, to_user.first_name);
+    tg_text = format!("{}{}", tg_text, to_user_name);
 
     if let Some(suffix) = exec.get(5) {
         tg_text = format!("{} {}", tg_text, suffix.as_str());
@@ -59,8 +104,15 @@ pub async fn process_message(message: &str, data: Message, bot: Bot) {
         .send_message(data.chat.id, tg_text.clone())
         .reply_to_message_id(data.id)
         .entities(tg_entities.clone())
+        .disable_web_page_preview(true)
         .await;
-    log::info!("Send message: {} {} {:#?} {:#?}", data.chat.id, tg_text, tg_entities, res)
+    log::info!(
+        "Send message: {} {} {:#?} {:#?}",
+        data.chat.id,
+        tg_text,
+        tg_entities,
+        res
+    )
 }
 
 fn is_chinese(c: char) -> bool {

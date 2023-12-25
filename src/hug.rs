@@ -1,6 +1,7 @@
 use regex::Regex;
 use reqwest::Url;
 use teloxide_core::{prelude::*, types::*};
+use utf16string::{BigEndian, WString};
 
 enum ChatOrUser {
     Chat(Chat),
@@ -70,7 +71,7 @@ pub async fn process_message(message: &str, data: Message, bot: Bot) {
             },
         },
         offset: 0,
-        length: from_user_name.chars().count(),
+        length: str_len(from_user_name),
     }];
     let mut tg_text = format!(
         "{} {}了 ",
@@ -89,8 +90,8 @@ pub async fn process_message(message: &str, data: Message, bot: Bot) {
                 .unwrap(),
             },
         },
-        offset: tg_text.chars().count(),
-        length: to_user_name.chars().count(),
+        offset: str_len(&tg_text),
+        length: str_len(to_user_name),
     });
     tg_text = format!("{}{}", tg_text, to_user_name);
 
@@ -127,4 +128,9 @@ fn add_space_if_english(s: &str) -> String {
         }
     }
     s.to_string()
+}
+
+fn str_len(s: &str) -> usize {
+    let wstr: WString<BigEndian> = WString::from(s);
+    wstr.len() / 2
 }

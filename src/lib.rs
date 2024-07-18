@@ -32,6 +32,7 @@ async fn main(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
 
     channel_forward::process_update(update.clone(), bot.clone()).await;
     channel_forward_rb::process_update(update.clone(), bot.clone()).await;
+    no_xm::process_update(update.clone(), bot.clone()).await;
 
     match update.kind {
         UpdateKind::Message(message) => {

@@ -1,11 +1,13 @@
 mod anti_b23;
 mod channel_forward;
+mod channel_forward_rb;
 mod have_or_not;
 mod hug;
 mod is_or;
 mod o;
 mod is_or_not;
 mod good;
+mod no_xm;
 
 use log::Level;
 use teloxide_core::{prelude::*, types::*};
@@ -29,6 +31,7 @@ async fn main(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
     let bot = Bot::new(env.secret("BOT_TOKEN").unwrap().to_string());
 
     channel_forward::process_update(update.clone(), bot.clone()).await;
+    channel_forward_rb::process_update(update.clone(), bot.clone()).await;
 
     match update.kind {
         UpdateKind::Message(message) => {
